@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Crime Analysis Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #3498db;
+            --danger: #e74c3c;
+            --success: #2ecc71;
+            --dark: #1a1a1a;
+            --light: #f8f9fa;
+        }
+
+        body { 
+            margin: 0; 
+            padding: 20px; 
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--dark);
+            color: var(--light);
+        }
+        
+        .dashboard-container { 
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 24px;
+            height: 97vh;
+        }
+
+        .sidebar {
+            background: #2a2f3d;
+            padding: 20px;
+            border-radius: 12px;
+            overflow-y: auto;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: var(--secondary);
+            border-radius: 4px;
+        }
+
+        .map-container {
+            display: grid;
+            grid-template-rows: repeat(3, minmax(300px, 1fr));
+            gap: 24px;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+
+        .map-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .map-container::-webkit-scrollbar-thumb {
+            background: var(--secondary);
+            border-radius: 4px;
+        }
+
+        .map-frame {
+            background: #2a2f3d;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+            min-height: 300px;
+            height: 400px;
+        }
+
+        @media (max-height: 800px) {
+            .map-frame {
+                height: 350px;
+            }
+        }
+
+        .map-header {
+            background: var(--primary);
+            color: white;
+            padding: 16px;
+            margin: 0;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        iframe {
+            width: 100%;
+            height: calc(100% - 50px);
+            border: none;
+        }
+
+        .hotspot-card {
+            background: #373d4b;
+            padding: 16px;
+            margin-bottom: 16px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            cursor: pointer;
+            border-left: 4px solid var(--danger);
+        }
+
+        .hotspot-card:hover {
+            background: #424956;
+            transform: translateX(4px);
+        }
+
+        .hotspot-card h3 {
+            margin: 0 0 8px 0;
+            color: var(--secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .hotspot-card p {
+            margin: 6px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .risk-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-left: auto;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: var(--secondary);
+        }
+
+        .error {
+            background: var(--danger);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dashboard-title {
+            margin: 0 0 24px 0;
+            padding-bottom: 16px;
+            border-bottom: 2px solid var(--secondary);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="sidebar">
+            <h1 class="dashboard-title">
+                <i class="fas fa-map-marked-alt"></i>
+                Crime Analytics
+            </h1>
+            <div id="hotspots-list">
+                <p class="loading"><i class="fas fa-spinner fa-spin"></i> Analyzing crime data...</p>
+            </div>
+        </div>
+        
+        <div class="map-container">
+            <div class="map-frame">
+                <h2 class="map-header">
+                    <i class="fas fa-fire"></i>
+                    Risk Heatmap
+                </h2>
+                <iframe src="/heat-map"></iframe>
+            </div>
+            <div class="map-frame">
+                <h2 class="map-header">
+                    <i class="fas fa-map-pin"></i>
+                    Incident Cluster Map
+                </h2>
+                <iframe src="/hotspot-map"></iframe>
+            </div>
+            <div class="map-frame">
+                <h2 class="map-header">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Status Overview
+                </h2>
+                <iframe src="/status-map"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Dynamic iframe resizing
+        window.addEventListener('DOMContentLoaded', () => {
+            const maps = document.querySelectorAll('.map-frame');
+            
+            function resizeMaps() {
+                maps.forEach(map => {
+                    const headerHeight = map.querySelector('.map-header').offsetHeight;
+                    const iframe = map.querySelector('iframe');
+                    iframe.style.height = `${map.offsetHeight - headerHeight}px`;
+                });
+            }
+
+            resizeMaps();
+            window.addEventListener('resize', resizeMaps);
+        });
+
+        // Load hotspot data
+        fetch('/hotspot-data')
+            .then(response => response.json())
+            .then(data => {
+                const list = document.getElementById('hotspots-list');
+                list.innerHTML = data.hotspots.map((hotspot, index) => {
+                    const riskColor = hotspot.risk_score > 7.5 ? 'var(--danger)' : 
+                                   hotspot.risk_score > 5 ? '#f1c40f' : '#2ecc71';
+                    return `
+                    <div class="hotspot-card">
+                        <h3>
+                            <i class="fas fa-bullseye"></i>
+                            Zone ${index + 1}
+                            <span class="risk-indicator" style="background: ${riskColor}"></span>
+                        </h3>
+                        <p><i class="fas fa-map-marker-alt"></i> 
+                            ${hotspot.latitude.toFixed(4)}, ${hotspot.longitude.toFixed(4)}
+                        </p>
+                        <p><i class="fas fa-chart-line"></i> Risk: ${hotspot.risk_score.toFixed(2)}</p>
+                        <p><i class="fas fa-bell"></i> Incidents: ${hotspot.crime_count}</p>
+                    </div>
+                `}).join('');
+            })
+            .catch(error => {
+                document.getElementById('hotspots-list').innerHTML = 
+                    `<div class="error">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Failed to load hotspot data. Please try again later.
+                    </div>`;
+            });
+    </script>
+</body>
+</html>

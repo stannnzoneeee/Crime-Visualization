@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+python-dotenv
+pandas
+pymongo
+folium
+scikit-learn
